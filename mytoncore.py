@@ -2820,7 +2820,7 @@ def Mining(ton):
 	cpus = psutil.cpu_count() - 1
 	numThreads = "-w{cpus}".format(cpus=cpus)
 	params = ton.GetPowParams(powAddr)
-	args = ["-vv", numThreads, "-t100", minerAddr, params["seed"], params["complexity"], params["iterations"], powAddr, filePath]
+	args = ["-vv", numThreads, "-t1800", minerAddr, params["seed"], params["complexity"], params["iterations"], powAddr, filePath]
 	result = ton.miner.Run(args)
 
 	if "Saving" in result:
