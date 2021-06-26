@@ -174,6 +174,8 @@ class MyTonCore():
 		self.fift = Fift()
 		self.miner = Miner()
 
+		self.seed = 0
+
 		local.dbLoad()
 		self.Refresh()
 		self.Init()
@@ -2793,17 +2795,22 @@ def Telemetry(ton):
 	resp = requests.post(url, data=output, timeout=3)
 #end define
 
+def MonitorExcutionTime(ton):
+	local.AddLog("start MonitorExcutionTime function", "debug")
+
+#end define
+
 def MonitorSeed(ton):
 	local.AddLog("start MonitorSeed function", "debug")
 	powAddr = local.db.get("powAddr")
 	if powAddr is None:
 		return
 	#end if
-	seed = ton.GetPowParams(powAddr)
-	if ton.seed is not seed:
+	params = ton.GetPowParams(powAddr)
+	if ton.seed != params["seed"]:
 		local.AddLog("monitor the seed is update", "debug")
 		pid = int(subprocess.check_output(["pidof", "-s", "pow-miner"]))
-		subprocess.run(["kill", "-9", pid])
+		subprocess.run(["kill", "-9", str(pid)])
 		local.AddLog("MonitorSeed kill the process pid: {pids}".format(pids=pid), "debug")
 	#end if
 #end define
@@ -2820,6 +2827,9 @@ def Mining(ton):
 	cpus = psutil.cpu_count() - 1
 	numThreads = "-w{cpus}".format(cpus=cpus)
 	params = ton.GetPowParams(powAddr)
+
+	ton.seed = params["seed"]
+
 	args = ["-vv", numThreads, "-t1800", minerAddr, params["seed"], params["complexity"], params["iterations"], powAddr, filePath]
 	result = ton.miner.Run(args)
 
@@ -2947,7 +2957,8 @@ def EnsurePeriodParams():
 			"mining": 1,
 			"scanBlocks": 1,
 			"readBlocks": 0.3,
-			"monitorSeed": 3
+			"monitorSeed": 3,
+			"monitorExcutionTime": 86400
 		};
 	if "periods" not in local.db:
 		local.db["periods"] = default_periods
@@ -2965,7 +2976,7 @@ def General():
 	# Запустить потоки
 	for subprocess in [Elections, Statistics, Offers, Complaints,
 					   Slashing, Domains, Telemetry, Mining, ScanBlocks,
-					   ReadBlocks, MonitorSeed]:
+					   ReadBlocks, MonitorSeed, MonitorExcutionTime]:
 		# period names in camelCase
 		periodName = subprocess.__name__[:1].lower() + subprocess.__name__[1:]
 		period = local.db["periods"][periodName]
