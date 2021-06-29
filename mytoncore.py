@@ -2846,6 +2846,7 @@ def MonitorSeed(ton):
 			pid = int(subprocess.check_output(["pidof", "-s", "pow-miner"]))
 			subprocess.run(["kill", "-9", str(pid)])
 			local.AddLog("MonitorSeed kill the process pid: {pids}".format(pids=pid), "debug")
+			time.sleep(3)
 		except:
 			local.AddLog("there is no exist pow-miner process", "debug")
 	#end if
