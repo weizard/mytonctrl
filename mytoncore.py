@@ -2852,8 +2852,25 @@ def MonitorSeed(ton):
 	#end if
 #end define
 
-def Mining(ton):
+def MonitorComplexity(ton):
 	powAddr = local.db.get("powAddr")
+	if powAddr is None or ton.calcExecTime:
+		return
+	#end if
+
+	params = None
+	if type(powAddr) == str:
+		ton.lastPowAddr = powAddr
+	elif type(powAddr) == list:
+		for _powAddr in powAddr:
+				_params = ton.GetPowParams(_powAddr)
+				if params is None or _params["complexity"] < params["complexity"]:
+					params = _params
+					ton.lastPowAddr = _powAddr
+#end define
+
+def Mining(ton):
+	powAddr = ton.lastPowAddr
 	minerAddr = local.db.get("minerAddr")
 	if powAddr is None or minerAddr is None or ton.calcExecTime:
 		return
@@ -2864,18 +2881,7 @@ def Mining(ton):
 	cpus = psutil.cpu_count() - 1
 	numThreads = "-w{cpus}".format(cpus=cpus)
 
-	params = None
-	if type(powAddr) == str:
-		params = ton.GetPowParams(powAddr)
-		ton.lastPowAddr = powAddr
-	elif type(powAddr) == list:
-		for _powAddr in powAddr:
-				_params = ton.GetPowParams(_powAddr)
-				if params is None or _params["complexity"] < params["complexity"]:
-					params = _params
-					ton.lastPowAddr = _powAddr
-	#end if
-
+	params = ton.GetPowParams(powAddr)
 	if params is None:
 		return
 	#end if
@@ -3010,7 +3016,8 @@ def EnsurePeriodParams():
 			"scanBlocks": 1,
 			"readBlocks": 0.3,
 			"monitorSeed": 3,
-			"monitorExcutionTime": 86400
+			"monitorExcutionTime": 86400,
+			"monitorComplexity":30
 		};
 	if "periods" not in local.db:
 		local.db["periods"] = default_periods
@@ -3028,7 +3035,7 @@ def General():
 	# Запустить потоки
 	for subprocess in [Elections, Statistics, Offers, Complaints,
 					   Slashing, Domains, Telemetry, Mining, ScanBlocks,
-					   ReadBlocks, MonitorSeed, MonitorExcutionTime]:
+					   ReadBlocks, MonitorSeed, MonitorExcutionTime, MonitorComplexity]:
 		# period names in camelCase
 		periodName = subprocess.__name__[:1].lower() + subprocess.__name__[1:]
 		period = local.db["periods"][periodName]
