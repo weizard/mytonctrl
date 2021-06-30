@@ -178,7 +178,8 @@ class MyTonCore():
 		self.calcExecTime = False
 		self.execTime = "0"
 
-		self.lastPowAddr = None
+		self.minComplexityPowAddr = None
+		self.inUsePowAddr = None
 
 		local.dbLoad()
 		self.Refresh()
@@ -2801,7 +2802,7 @@ def Telemetry(ton):
 
 def MonitorExcutionTime(ton):
 	local.AddLog("start MonitorExcutionTime function", "debug")
-	powAddr = ton.lastPowAddr
+	powAddr = ton.inUsePowAddr
 	minerAddr = local.db.get("minerAddr")
 	if powAddr is None or minerAddr is None or ton.calcExecTime:
 		time.sleep(1)
@@ -2833,7 +2834,7 @@ def MonitorExcutionTime(ton):
 
 def MonitorSeed(ton):
 	local.AddLog("start MonitorSeed function", "debug")
-	powAddr = ton.lastPowAddr
+	powAddr = ton.inUsePowAddr
 	if powAddr is None or ton.calcExecTime:
 		return
 	#end if
@@ -2860,22 +2861,23 @@ def MonitorComplexity(ton):
 
 	params = None
 	if type(powAddr) == str:
-		ton.lastPowAddr = powAddr
+		ton.minComplexityPowAddr = powAddr
 	elif type(powAddr) == list:
 		for _powAddr in powAddr:
 				_params = ton.GetPowParams(_powAddr)
 				if params is None or _params["complexity"] < params["complexity"]:
 					params = _params
-					ton.lastPowAddr = _powAddr
+					ton.minComplexityPowAddr = _powAddr
 #end define
 
 def Mining(ton):
-	powAddr = ton.lastPowAddr
+	powAddr = ton.minComplexityPowAddr
 	minerAddr = local.db.get("minerAddr")
 	if powAddr is None or minerAddr is None or ton.calcExecTime:
 		return
 	#end if
 
+	ton.inUsePowAddr = powAddr
 	local.AddLog("start Mining function", "debug")
 	filePath = ton.tempDir + "mined.boc"
 	cpus = psutil.cpu_count() - 1
@@ -2888,7 +2890,7 @@ def Mining(ton):
 
 	ton.seed = params["seed"]
 
-	args = ["-vv", numThreads, "-t"+ton.execTime, minerAddr, params["seed"], params["complexity"], params["iterations"], ton.lastPowAddr, filePath]
+	args = ["-vv", numThreads, "-t"+ton.execTime, minerAddr, params["seed"], params["complexity"], params["iterations"], powAddr, filePath]
 	result = ton.miner.Run(args)
 
 	if "Saving" in result:
