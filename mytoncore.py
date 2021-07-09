@@ -3063,7 +3063,7 @@ def EnsurePeriodParams():
 			"readBlocks": 0.3,
 			"monitorSeed": 3,
 			"monitorExcutionTime": 86400,
-			"monitorComplexity":30
+			"monitorComplexity":30,
 			"scanLiteServers": 60
 		};
 	if "periods" not in local.db:
@@ -3082,8 +3082,7 @@ def General():
 	# Запустить потоки
 	for subprocess in [Elections, Statistics, Offers, Complaints,
 					   Slashing, Domains, Telemetry, Mining, ScanBlocks,
-					   ReadBlocks, MonitorSeed, MonitorExcutionTime, MonitorComplexity]:
-					   ReadBlocks, ScanLiteServers]:
+					   ReadBlocks, MonitorSeed, MonitorExcutionTime, MonitorComplexity , ScanLiteServers]:
 		# period names in camelCase
 		periodName = subprocess.__name__[:1].lower() + subprocess.__name__[1:]
 		period = local.db["periods"][periodName]
