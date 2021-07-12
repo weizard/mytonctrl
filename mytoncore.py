@@ -3,6 +3,7 @@
 
 import crc16
 import struct
+import random
 import requests
 import re
 import time
@@ -22,23 +23,19 @@ class LiteClient:
 	def Run(self, cmd, **kwargs):
 		timeout = kwargs.get("timeout", 3)
 		index = kwargs.get("index")
-		ready = False
-		if self.pubkeyPath:
-			validatorStatus = self.ton.GetValidatorStatus()
-			validatorOutOfSync = validatorStatus.get("outOfSync")
-			if validatorOutOfSync < 20:
-				args = [self.appPath, "--addr", self.addr, "--pub", self.pubkeyPath, "--verbosity", "0", "--cmd", cmd]
-				ready = True
-		if ready == False:
-			args = [self.appPath, "--global-config", self.configPath, "--verbosity", "0", "--cmd", cmd]
+		validatorStatus = self.ton.GetValidatorStatus()
+		validatorOutOfSync = validatorStatus.get("outOfSync")
+		args = [self.appPath, "--global-config", self.configPath, "--verbosity", "0", "--cmd", cmd]
 		if index:
 			index = str(index)
 			args += ["-i", index]
+		elif self.pubkeyPath and validatorOutOfSync < 20:
+			args = [self.appPath, "--addr", self.addr, "--pub", self.pubkeyPath, "--verbosity", "0", "--cmd", cmd]
 		else:
-			buff = local.db.get("liteServerIndex")
-			if buff:
-				index = str(buff)
-				args += ["-i", index]
+			liteServers = local.db.get("liteServers")
+			index = random.choice(liteServers)
+			index = str(index)
+			args += ["-i", index]
 		#end if
 
 		process = subprocess.run(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
@@ -1534,8 +1531,8 @@ class MyTonCore():
 		return vconfig
 	#end define
 
-	def MoveGrams(self, wallet, dest, grams, **kwargs):
-		local.AddLog("start MoveGrams function", "debug")
+	def MoveCoins(self, wallet, dest, grams, **kwargs):
+		local.AddLog("start MoveCoins function", "debug")
 		flags = kwargs.get("flags")
 		wait = kwargs.get("wait", True)
 		if grams == "all":
@@ -1560,11 +1557,11 @@ class MyTonCore():
 		local.AddLog("start MoveGramsThroughProxy function", "debug")
 		wallet1 = self.CreateWallet("proxy_wallet1", 0)
 		wallet2 = self.CreateWallet("proxy_wallet2", 0)
-		self.MoveGrams(wallet, wallet1.addr_init, grams)
+		self.MoveCoins(wallet, wallet1.addr_init, grams)
 		self.ActivateWallet(wallet1)
-		self.MoveGrams(wallet1, wallet2.addr_init, "alld")
+		self.MoveCoins(wallet1, wallet2.addr_init, "alld")
 		self.ActivateWallet(wallet2)
-		self.MoveGrams(wallet2, dest, "alld", flags=["-n"])
+		self.MoveCoins(wallet2, dest, "alld", flags=["-n"])
 		wallet1.Delete()
 		wallet2.Delete()
 	#end define
@@ -2518,6 +2515,19 @@ class MyTonCore():
 		local.dbSave()
 	#end define
 
+	def GetHashrate(self):
+		filePath = self.tempDir + "mined.boc"
+		cpus = psutil.cpu_count()
+		powAddr = 'kf-kkdY_B7p-77TLn2hUhM6QidWrrsl8FYWCIvBMpZKprBtN'
+		if self.minComplexityPowAddr is not None:
+			powAddr = self.minComplexityPowAddr
+		numThreads = "-w{cpus}".format(cpus=cpus)
+		params = self.GetPowParams(powAddr)
+		args = ["-vv", numThreads, "-t3", powAddr, params["seed"], params["complexity"], params["iterations"], 'kf-kkdY_B7p-77TLn2hUhM6QidWrrsl8FYWCIvBMpZKprBtN', filePath]
+		result = self.miner.Run(args)
+		return result
+	#end define
+
 	def Tlb2Json(self, text):
 		# Заменить скобки
 		start = 0
@@ -2892,8 +2902,9 @@ def Mining(ton):
 
 	ton.inUsePowAddr = powAddr
 	local.AddLog("start Mining function", "debug")
+	local.AddLog(powAddr, "debug")
 	filePath = ton.tempDir + "mined.boc"
-	cpus = psutil.cpu_count() - 1
+	cpus = psutil.cpu_count()-1
 	numThreads = "-w{cpus}".format(cpus=cpus)
 
 	params = ton.GetPowParams(powAddr)
@@ -2905,7 +2916,6 @@ def Mining(ton):
 
 	args = ["-vv", numThreads, "-t"+ton.execTime, minerAddr, params["seed"], params["complexity"], params["iterations"], powAddr, filePath]
 	result = ton.miner.Run(args)
-
 	if "Saving" in result:
 		newParams = ton.GetPowParams(powAddr)
 		if params["seed"] == newParams["seed"] and params["complexity"] == newParams["complexity"]:
@@ -3028,6 +3038,7 @@ def ScanLiteServers(ton):
 	data = json.loads(text)
 
 	# Пройтись по серверам
+	result = list()
 	liteservers = data.get("liteservers")
 	for index in range(len(liteservers)):
 		item = liteservers[index]
@@ -3035,18 +3046,12 @@ def ScanLiteServers(ton):
 			start = time.time()
 			ton.liteClient.Run("last", index=index)
 			end = time.time()
-			timediff = end - start
-		except:
-			timediff = 999
-		item["index"] = index
-		item["timediff"] = timediff
+			result.append(index)
+		except: pass
 	#end for
 
-	# Посчитать время реакции запроса
-	buff = sorted(liteservers, key=lambda k: k['timediff'])
-	prime = buff[0]
-	primeIndex = prime.get("index")
-	local.db["liteServerIndex"] = primeIndex
+	# Записать данные в базу
+	local.db["liteServers"] = result
 #end define
 
 def EnsurePeriodParams():
